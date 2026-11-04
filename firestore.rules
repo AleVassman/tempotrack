@@ -1,0 +1,86 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSuperUser() {
+      return getUserData(request.auth.uid).role == 'hr' || getUserData(request.auth.uid).role == 'admin';
+    }
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
+    }
+
+    // Rules for the users collection
+    match /users/{userId} {
+      // Allow any authenticated user to read a single user's document
+      // AND to query the entire users collection.
+      allow get, list: if request.auth != null;
+      
+      // Allow a user to update their own data, or an HR to update any data.
+      allow update: if request.auth.uid == userId || getUserData(request.auth.uid).role == 'hr';
+    }
+
+    // Rules for the holidays collection
+    match /holidays/{year} {
+      allow read: if request.auth != null;
+      allow write: if isSuperUser();
+    }
+
+    // Rule to authorize collectionGroup queries.
+    // Admins/HR can list every move request; any signed-in user can list the
+    // APPROVED ones, which the team calendar shows as "Recupero" for colleagues.
+    // (Queries must filter on status == 'approved' for that second branch.)
+    match /{path=**}/compensatoryMoveRequests/{moveRequestId} {
+      allow list: if isSuperUser() ||
+                  (request.auth != null && resource.data.status == 'approved');
+    }
+
+    // Rules for the compensatoryMoveRequests subcollection
+    match /users/{userId}/compensatoryMoveRequests/{weekId} {
+      allow create: if request.auth.uid == userId && request.resource.data.status == 'pending';
+      allow update: if isSuperUser() || (request.auth.uid == userId && resource.data.status == 'pending');
+      allow read: if request.auth.uid == userId || isSuperUser();
+      allow delete: if isSuperUser();
+    }
+
+    // Rules for the documents collection
+    match /documents/{documentId} {
+      allow read: if isSuperUser() || request.auth.uid == resource.data.userId;
+      allow create, delete: if isSuperUser();
+    }
+    
+    // Rules for the timeOffRequests collection
+    match /timeOffRequests/{requestId} {
+        // A user can create a request if they are creating it for themselves,
+        // OR if they are an admin or HR.
+        allow create: if request.auth.uid == request.resource.data.userId || 
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'hr'];
+
+        allow read: if resource.data.status == 'Approvato' || isSuperUser() || request.auth.uid == resource.data.userId;
+        allow update: if isSuperUser();
+        allow delete: if isSuperUser() || (request.auth.uid == resource.data.userId && resource.data.status == 'In Sospeso');
+    }
+
+    match /archive_timeOffRequests/{requestId} {
+      // Only Super Users (admin or hr) are allowed to read from the archive.
+      // No one should be able to create, update, or delete archived documents from the client.
+      allow read: if isSuperUser();
+      allow create, update, delete: if false; // Deny all write operations
+    }
+
+    // Rules for the metadata collection
+    match /metadata/{docId} {
+        allow read: if request.auth != null;
+        allow write: if false;
+    }
+    
+    // Rules for the notifications collection
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.resource.data.userId != null;
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId && request.resource.data.read == true;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+  }
+}

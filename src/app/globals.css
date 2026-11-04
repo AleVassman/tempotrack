@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Inter', sans-serif;
+}
+
+@layer base {
+  :root {
+    --background: 210 20% 95%;
+    --foreground: 224 71.4% 4.1%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 71.4% 4.1%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 71.4% 4.1%;
+    --primary: 210 70% 50%;  
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 20% 90%;
+    --secondary-foreground: 224 71.4% 4.1%;
+    --muted: 210 20% 90%;
+    --muted-foreground: 225.9 5.3% 44.3%;
+    --accent: 180 60% 40%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 210 20% 85%;
+    --input: 210 20% 85%;
+    --ring: 210 70% 50%;
+    --chart-1: 210 70% 50%;
+    --chart-2: 180 60% 40%;
+    --chart-3: 250 60% 55%;
+    --chart-4: 30 80% 55%;
+    --chart-5: 340 75% 55%;
+    --chart-6: 110 50% 50%;
+    --chart-7: 280 50% 60%;
+    --radius: 0.5rem;
+    --sidebar-background: 220 10% 98%;
+    --sidebar-foreground: 224 71.4% 4.1%;
+    --sidebar-primary: 210 70% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 20% 90%;
+    --sidebar-accent-foreground: 224 71.4% 4.1%;
+    --sidebar-border: 210 20% 85%;
+    --sidebar-ring: 210 70% 50%;
+  }
+
+  .bg-stripes {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 5px,
+    hsla(0, 0%, 0%, 0.05) 5px,
+    hsla(0, 0%, 0%, 0.05) 10px
+  );
+}
+
+  .dark {
+    --background: 224 71.4% 4.1%;
+    --foreground: 210 20% 95%;
+    --card: 224 71.4% 4.1%;
+    --card-foreground: 210 20% 95%;
+    --popover: 224 71.4% 4.1%;
+    --popover-foreground: 210 20% 95%;
+    --primary: 210 70% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 20% 10%;
+    --secondary-foreground: 210 20% 95%;
+    --muted: 210 20% 10%;
+    --muted-foreground: 215 5.3% 44.3%;
+    --accent: 180 60% 40%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 210 20% 15%;
+    --input: 210 20% 15%;
+    --ring: 210 70% 50%;
+    --chart-1: 210 70% 50%;
+    --chart-2: 180 60% 40%;
+    --chart-3: 250 60% 55%;
+    --chart-4: 30 80% 55%;
+    --chart-5: 340 75% 55%;
+    --chart-6: 110 50% 55%;
+    --chart-7: 280 50% 65%;
+    --sidebar-background: 224 71.4% 4.1%;
+    --sidebar-foreground: 210 20% 95%;
+    --sidebar-primary: 210 70% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 20% 10%;
+    --sidebar-accent-foreground: 210 20% 95%;
+    --sidebar-border: 210 20% 15%;
+    --sidebar-ring: 210 70% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
