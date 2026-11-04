@@ -33,6 +33,21 @@ Open **[tempotrack-demo.web.app](https://tempotrack-demo.web.app)** and sign in 
 
 > The interface is in Italian, like the original product. Every person and number in the demo is fake (see [Demo data](#demo-data)). The demo is shared, so other visitors may have changed things.
 
+### Embed it
+
+Any website can embed the live demo in an iframe (`frame-ancestors *` in [`firebase.json`](firebase.json)):
+
+```html
+<iframe
+  src="https://tempotrack-demo.web.app/login"
+  title="TempoTrack live demo"
+  width="100%" height="720"
+  style="border: 0; border-radius: 12px;"
+  loading="lazy"
+  allow="clipboard-write">
+</iframe>
+```
+
 ## About this project
 
 TempoTrack replaced spreadsheets and email threads for managing staff absences at an Italian company. Employees request time off from their phone, managers approve it in one tap, and HR sees who is off, and why, across every department.
@@ -125,7 +140,7 @@ flowchart LR
 - **Static export plus a client-side Firebase SDK.** Every page is client-rendered against Firestore real-time listeners, so the build is plain static files on Firebase Hosting. There is no server to run or pay for.
 - **Firestore offline persistence** (`persistentLocalCache`) keeps the app usable on a weak connection, and the service worker caches the app shell.
 - **Cloud Functions handle anything that must not be trusted to the client:** creating users with role claims, routing push notifications to the right approvers, and a scheduled job that archives old requests and notifications each year.
-- **Configuration as code.** `firebase.json` declares the database location, rules, indexes, auth providers and hosting security headers (Content-Security-Policy, X-Frame-Options, nosniff, Referrer-Policy). A fresh project is one `firebase deploy` away.
+- **Configuration as code.** `firebase.json` declares the database location, rules, indexes, auth providers and hosting security headers (a Content-Security-Policy that limits scripts and connections to Firebase while allowing iframe embedding, plus nosniff and Referrer-Policy). A fresh project is one `firebase deploy` away.
 
 ### Data model
 
