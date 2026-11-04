@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/fix-static-export.mjs",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -12,7 +12,7 @@
     "seed:reset": "node scripts/seed.mjs --reset",
     "emulators": "firebase emulators:start --only auth,firestore,functions --project demo-tempotrack",
     "seed:emulator": "cross-env FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 GCLOUD_PROJECT=demo-tempotrack node scripts/seed.mjs --reset",
-    "deploy:hosting": "next build && firebase deploy --only hosting"
+    "deploy:hosting": "pnpm build && firebase deploy --only hosting"
   },
   "dependencies": {
     "@hookform/resolvers": "6.0.0",
