@@ -54,8 +54,11 @@ export const USER_ROLES = {
   ];
   
   /**
-   * DEPARTMENTS
-   * The list of departments in the organization.
+   * DEFAULT DEPARTMENTS
+   * Departments now live in the Firestore `departments` collection and are
+   * managed by HR (see src/lib/departments.ts). This list is only the initial
+   * seed for an empty collection and the fallback while it loads.
+   * Read the live list with the `useDepartments()` hook instead.
    */
   export const DEPARTMENTS = [
     "Vendite",

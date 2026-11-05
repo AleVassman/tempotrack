@@ -18,7 +18,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch"; // <-- AGGIUNTO IMPORT SWITCH
 import { AlertTriangle, Trash2, Loader2, Calendar as CalendarIcon, Clock } from "lucide-react";
-import { DEPARTMENTS, USER_ROLES } from "@/lib/constants";
+import { USER_ROLES } from "@/lib/constants";
+import { useDepartments } from "@/hooks/use-departments";
 import { format, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
 
@@ -32,8 +33,6 @@ interface DepartmentHoliday {
     startTime?: string | null;
     endTime?: string | null;
 }
-
-const AVAILABLE_DEPARTMENTS = DEPARTMENTS.filter(d => d !== "Nessuno");
 
 export default function FestivitaPage() {
     const { userProfile, loading: authLoading } = useAuth();
@@ -58,6 +57,9 @@ export default function FestivitaPage() {
     const [endTime, setEndTime] = useState("");
 
     const isHr = userProfile?.role === USER_ROLES.HR;
+    // Live department list (managed by HR in Gestione Utenti), without "Nessuno".
+    const { assignableNames: AVAILABLE_DEPARTMENTS } = useDepartments();
+    const allDepartmentsSelected = AVAILABLE_DEPARTMENTS.length > 0 && AVAILABLE_DEPARTMENTS.every(d => selectedDepts.includes(d));
 
     useEffect(() => {
         if (authLoading || !isHr) {
@@ -85,7 +87,8 @@ export default function FestivitaPage() {
         e.preventDefault();
         
         // --- MODIFICATA: Validazione con orari ---
-        if (!newName || !newDate || selectedDepts.length === 0) {
+        const validDepts = selectedDepts.filter(d => AVAILABLE_DEPARTMENTS.includes(d));
+        if (!newName || !newDate || validDepts.length === 0) {
             toast({ variant: "destructive", title: "Errore", description: "Compila tutti i campi e seleziona almeno un dipartimento." });
             return;
         }
@@ -105,7 +108,7 @@ export default function FestivitaPage() {
                 id: Date.now().toString(),
                 date: newDate,
                 name: newName,
-                departments: selectedDepts,
+                departments: validDepts,
                 isPartial: isPartialDay,
                 startTime: isPartialDay ? startTime : null,
                 endTime: isPartialDay ? endTime : null,
@@ -146,7 +149,7 @@ export default function FestivitaPage() {
     };
 
     const toggleAllDepartments = () => {
-        if (selectedDepts.length === AVAILABLE_DEPARTMENTS.length) {
+        if (allDepartmentsSelected) {
             setSelectedDepts([]);
         } else {
             setSelectedDepts(AVAILABLE_DEPARTMENTS);
@@ -222,7 +225,7 @@ export default function FestivitaPage() {
                                 <div className="flex items-center justify-between">
                                     <Label>Dipartimenti Applicati</Label>
                                     <Button type="button" variant="ghost" size="sm" onClick={toggleAllDepartments} className="h-auto p-0 text-primary">
-                                        {selectedDepts.length === AVAILABLE_DEPARTMENTS.length ? 'Deseleziona Tutti' : 'Seleziona Tutti'}
+                                        {allDepartmentsSelected ? 'Deseleziona Tutti' : 'Seleziona Tutti'}
                                     </Button>
                                 </div>
                                 <div className="grid grid-cols-1 gap-2 border rounded-md p-3 max-h-48 overflow-y-auto bg-muted/20">
@@ -283,7 +286,7 @@ export default function FestivitaPage() {
                                     ) : (
                                         holidays.map((holiday, index) => {
                                             const depts = holiday.departments ||[];
-                                            const isAll = !holiday.departments || depts.length === AVAILABLE_DEPARTMENTS.length || depts.length === 0;
+                                            const isAll = depts.length === 0 || AVAILABLE_DEPARTMENTS.every(d => depts.includes(d));
 
                                             return (
                                                 <TableRow key={holiday.id || `legacy-${holiday.date}-${index}`}>

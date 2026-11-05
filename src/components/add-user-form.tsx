@@ -12,7 +12,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2 } from "lucide-react";
-import { DEPARTMENTS, USER_ROLES, IS_DEMO, DEMO_USER_MANAGEMENT_MESSAGE } from "@/lib/constants";
+import { USER_ROLES, IS_DEMO, DEMO_USER_MANAGEMENT_MESSAGE } from "@/lib/constants";
+import { useDepartments } from "@/hooks/use-departments";
+import { NONE_DEPARTMENT } from "@/lib/departments";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 // Define the shape of our form data with validation
@@ -34,10 +36,11 @@ interface AddUserFormProps {
 export function AddUserForm({ onSuccess }: AddUserFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { names: departmentNames } = useDepartments(); // live list: new departments appear here immediately
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { email: "", password: "", firstName: "", lastName: "", department: "Nessuno", role: "user", contactEmail: "", cellphone: "" },
+    defaultValues: { email: "", password: "", firstName: "", lastName: "", department: NONE_DEPARTMENT, role: "user", contactEmail: "", cellphone: "" },
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
@@ -135,7 +138,7 @@ export function AddUserForm({ onSuccess }: AddUserFormProps) {
                 <Select onValueChange={field.onChange} defaultValue={field.value}>
                   <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                   <SelectContent>
-                    {DEPARTMENTS.map(dep => <SelectItem key={dep} value={dep}>{dep}</SelectItem>)}
+                    {departmentNames.map(dep => <SelectItem key={dep} value={dep}>{dep}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <FormMessage />

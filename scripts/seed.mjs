@@ -54,7 +54,7 @@ if (!DRY_RUN && !PROJECT_ID) {
 // Same deterministic data on every run.
 faker.seed(20251104);
 
-// Keep in sync with src/lib/constants.ts
+// Keep in sync with src/lib/constants.ts (the app seeds the same list on first run)
 const DEPARTMENTS = ["Vendite", "Direzione", "Back Office", "Amministrazione", "Marketing", "Customer Care", "Logistica", "Assistenza Tecnica"];
 const DAY_IDS = ["DOM", "LUN", "MAR", "MER", "GIO", "VEN", "SAB"]; // index = Date#getDay()
 const STATUS = { PENDING: "In Sospeso", APPROVED: "Approvato", REJECTED: "Rifiutato" };
@@ -94,6 +94,7 @@ if (RESET) await resetDemoData();
 
 const holidaysByYear = buildHolidays([windowStart.getFullYear(), today.getFullYear(), windowEnd.getFullYear()]);
 await writeHolidays(holidaysByYear);
+await writeDepartments();
 
 const users = await createUsers();
 const requests = await createTimeOffRequests(users, holidaysByYear);
@@ -199,6 +200,26 @@ async function upsertAuthUser(email, displayName) {
     const user = await auth.createUser({ email, password: DEMO_PASSWORD, displayName, emailVerified: true });
     return user.uid;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Departments (managed by HR in the app; same ids as the in-app first-run migration)
+// ---------------------------------------------------------------------------
+async function writeDepartments() {
+  const batch = db.batch();
+  const now = Timestamp.now();
+  for (const name of DEPARTMENTS) {
+    batch.set(db.collection("departments").doc(departmentId(name)), { name, isSystem: false, createdAt: now, updatedAt: now });
+  }
+  // Protected fallback: cannot be renamed or deleted (enforced by firestore.rules).
+  batch.set(db.collection("departments").doc("nessuno"), { name: "Nessuno", isSystem: true, createdAt: now, updatedAt: now });
+  await batch.commit();
+  console.log(`  departments: ${DEPARTMENTS.length + 1}`);
+}
+
+/** Mirrors slugifyDepartmentName() in src/lib/departments.ts ("Back Office" -> "back-office"). */
+function departmentId(name) {
+  return name.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
 // ---------------------------------------------------------------------------
@@ -427,7 +448,7 @@ async function createNotifications(users, requests) {
 // ---------------------------------------------------------------------------
 async function resetDemoData() {
   console.log("  resetting demo data...");
-  for (const name of ["timeOffRequests", "archive_timeOffRequests", "notifications", "archive_notifications", "holidays", "users"]) {
+  for (const name of ["timeOffRequests", "archive_timeOffRequests", "notifications", "archive_notifications", "holidays", "departments", "users"]) {
     await db.recursiveDelete(db.collection(name)); // also removes users/*/compensatoryMoveRequests
   }
   let pageToken;

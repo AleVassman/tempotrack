@@ -81,6 +81,9 @@ Absence breakdown by employee and type, per month or year (Recharts).
 **HR administration** (`/users`, `/festivita`)<br/>
 Work schedules, roles, the departments each manager handles, and company holidays: national, department-only and partial-day closures.
 
+**Department management** ("Gestisci Dipartimenti")<br/>
+HR adds, renames and deletes departments from a modal that shows how many employees each one has. Renames and deletes cascade safely to every employee, manager and holiday in one atomic batch, and the change appears on every open screen in real time. See [how it works](#department-management).
+
 </td>
 </tr>
 </table>
@@ -108,6 +111,7 @@ Also included: an **installable PWA** with an offline page and Firestore offline
 | Approve or reject requests | | Own departments | All |
 | Planner and reports | | ✅ | ✅ |
 | Users, schedules and holidays | | | ✅ |
+| Add, rename and delete departments | | | ✅ |
 
 The role lives in two places. A **Firebase Auth custom claim** is checked by Cloud Functions, and the **user document** is checked by [Firestore security rules](firestore.rules). The rules enforce access on the server, so a modified client cannot read or change other people's requests.
 
@@ -142,11 +146,27 @@ flowchart LR
 - **Cloud Functions handle anything that must not be trusted to the client:** creating users with role claims, routing push notifications to the right approvers, and a scheduled job that archives old requests and notifications each year.
 - **Configuration as code.** `firebase.json` declares the database location, rules, indexes, auth providers and hosting security headers (a Content-Security-Policy that limits scripts and connections to Firebase while allowing iframe embedding, plus nosniff and Referrer-Policy). A fresh project is one `firebase deploy` away.
 
+### Department management
+
+Departments used to be a hardcoded list. They now live in a Firestore collection that HR manages from **Gestione Utenti → Gestisci Dipartimenti**, and a single real-time listener ([`use-departments.tsx`](src/hooks/use-departments.tsx)) keeps every dropdown, form and grouping in sync without a reload.
+
+A department name is copied onto other documents, so changing one is more than relabelling. The logic lives in [`src/lib/departments.ts`](src/lib/departments.ts):
+
+| Action | What happens, in one atomic batch |
+|---|---|
+| **Rename** | The department, every employee in it, every manager's `managedDepartments`, and every department-specific holiday move to the new name. |
+| **Delete, no employees** | It's removed immediately and cleaned out of managers' lists and holidays. |
+| **Delete, with employees** | A confirmation shows how many employees, managers and holidays are affected. Employees move to **Nessuno**. Holidays that applied *only* to that department are removed, because an empty list would mean "every department" and make them company-wide. |
+| **"Nessuno"** | The protected fallback: it can't be renamed or deleted. This is enforced in the UI and again in the security rules. |
+
+Names are validated (no empty names, case-insensitive duplicates or reserved words such as "Nessuno"). On first run, an HR session migrates the original static list into the empty collection. It confirms with the server first, so an empty offline cache can never overwrite departments HR has already renamed. Time-off requests keep the department they were filed under, as a historical record.
+
 ### Data model
 
 | Collection | Contents |
 |---|---|
 | `users/{uid}` | Profile, role, department, work schedule, weekly compensatory day, managed departments |
+| `departments/{id}` | `name`, `isSystem` (the protected "Nessuno"), `createdAt`, `updatedAt` |
 | `users/{uid}/compensatoryMoveRequests/{weekId}` | Requests to move the weekly compensatory day (`2026-W45`) |
 | `timeOffRequests/{id}` | Dates, type, partial-day times, status (`In Sospeso` / `Approvato` / `Rifiutato`) |
 | `holidays/{year}` | `dates[]`: national, department-only or partial-day closures |
@@ -241,7 +261,7 @@ Hosting, Auth and Firestore all run on the free **Spark** plan. Cloud Functions 
 
 [`scripts/seed.mjs`](scripts/seed.mjs) uses `@faker-js/faker` (Italian locale, fixed seed) to generate the same realistic dataset on every run:
 
-- **29 people** in 8 departments, including the 3 demo accounts, with full-time, part-time and six-day schedules
+- **9 departments** (8 plus the protected "Nessuno") and **29 people**, including the 3 demo accounts, with full-time, part-time and six-day schedules
 - **About 160 time-off requests** over 6 past and 3 future months, in every status and with no overlaps per person. Sick leave only falls in the past, and no request is "created" in the future.
 - **Italian holidays**, with Easter Monday computed for each year, plus department-only and partial-day closures
 - **Compensatory-day moves** and **notifications**

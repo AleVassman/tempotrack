@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Pencil, Users as UsersIcon, AlertTriangle, PlusCircle, Trash2, Loader2 } from "lucide-react";
+import { Pencil, Users as UsersIcon, AlertTriangle, PlusCircle, Trash2, Loader2, Building2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
@@ -19,9 +19,15 @@ import { Input } from "@/components/ui/input";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DEPARTMENTS, DAYS_OF_WEEK, USER_ROLES, IS_DEMO, DEMO_USER_MANAGEMENT_MESSAGE } from "@/lib/constants";
+import { DAYS_OF_WEEK, USER_ROLES, IS_DEMO, DEMO_USER_MANAGEMENT_MESSAGE } from "@/lib/constants";
+import { useDepartments } from "@/hooks/use-departments";
+import { NONE_DEPARTMENT } from "@/lib/departments";
+import { ManageDepartmentsDialog } from "@/components/manage-departments-dialog";
 import { AddUserForm } from "@/components/add-user-form";
 import { getFunctions, httpsCallable } from "firebase/functions";
+
+/** Section for users whose profile has no department at all (legacy data). */
+const UNASSIGNED_SECTION = "Non Assegnato";
 
 interface UserDocument extends UserProfile {
     id: string;
@@ -83,51 +89,41 @@ export default function UsersPage() {
     const [compStartTime, setCompStartTime] = useState<string>('');
     const [compEndTime, setCompEndTime] = useState<string>('');
     const [isAddUserDialogOpen, setIsAddUserDialogOpen] = useState(false);
+    const [isDepartmentsDialogOpen, setIsDepartmentsDialogOpen] = useState(false);
+    // Track collapsed sections (not open ones) so new departments appear expanded.
+    const [closedSections, setClosedSections] = useState<string[]>([]);
+    const [reloadKey, setReloadKey] = useState(0);
+    const { names: departmentNames, assignableNames } = useDepartments();
 
 
     // const isHrUser = userProfile?.role === 'hr';
     const isHrUser = userProfile?.role === USER_ROLES.HR;
 
-    const fetchUsers = async () => {
-        if (!isHrUser) {
-            setLoading(false);
-            return;
-        }
-
-        setLoading(true);
-        setError(null);
-        try {
-            const usersQuery = query(collection(db, "users"), where("status", "!=", "deleted"));
-            const querySnapshot = await getDocs(usersQuery);
-            const usersData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserDocument));
-            
-            usersData.sort((a, b) => {
-                const lastNameA = a.lastName || '';
-                const lastNameB = b.lastName || '';
-                const firstNameA = a.firstName || '';
-                const firstNameB = b.firstName || '';
-
-                if (lastNameA < lastNameB) return -1;
-                if (lastNameA > lastNameB) return 1;
-                if (firstNameA < firstNameB) return -1;
-                if (firstNameA < firstNameB) return 1;
-                return 0;
-            });
-            
-            setUsers(usersData);
-        } catch (error) {
-            console.error("Error fetching users: ", error);
-            setError("Impossibile caricare gli utenti. Controlla la tua connessione e riprova.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
+    // Live listener: department renames/deletes regroup the table without a reload.
     useEffect(() => {
-        if (isHrUser) {
-            fetchUsers();
-        }
-    }, [isHrUser]);
+        if (!isHrUser) return;
+        const usersQuery = query(collection(db, "users"), where("status", "!=", "deleted"));
+        const unsubscribe = onSnapshot(usersQuery, (querySnapshot) => {
+            const usersData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserDocument));
+            usersData.sort((a, b) =>
+                (a.lastName || '').localeCompare(b.lastName || '', 'it') ||
+                (a.firstName || '').localeCompare(b.firstName || '', 'it'));
+            setUsers(usersData);
+            setError(null);
+            setLoading(false);
+        }, (err) => {
+            console.error("Error fetching users: ", err);
+            setError("Impossibile caricare gli utenti. Controlla la tua connessione e riprova.");
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, [isHrUser, reloadKey]);
+
+    /** Re-subscribes (the list is live, so this is only needed after an error). */
+    const fetchUsers = () => {
+        setLoading(true);
+        setReloadKey(k => k + 1);
+    };
 
     const pageLoading = loading || authLoading;
 
@@ -319,20 +315,24 @@ export default function UsersPage() {
         );
     }
 
-    const groupedUsers = users.reduce((acc, user) => {
-        const department = user.department || 'Non Assegnato';
-        if (!acc[department]) {
-            acc[department] = [];
-        }
-        acc[department].push(user);
-        return acc;
-    }, {} as Record<string, UserDocument[]>);
-
-    const sortedDepartments = Object.keys(groupedUsers).sort((a, b) => {
-        if (a === 'Non Assegnato') return 1;
-        if (b === 'Non Assegnato') return -1;
-        return a.localeCompare(b);
+    // One section per department (from the live list, so new ones show up empty),
+    // plus any department name still found on a profile but no longer in the list.
+    const groupedUsers: Record<string, UserDocument[]> = {};
+    departmentNames.forEach(name => { groupedUsers[name] = []; });
+    users.forEach(u => {
+        const section = u.department || UNASSIGNED_SECTION;
+        (groupedUsers[section] ??= []).push(u);
     });
+    const userCounts = Object.fromEntries(Object.entries(groupedUsers).map(([name, list]) => [name, list.length]));
+    const orphanSections = Object.keys(groupedUsers)
+        .filter(name => !departmentNames.includes(name) && name !== UNASSIGNED_SECTION)
+        .sort((a, b) => a.localeCompare(b, 'it'));
+    const sortedDepartments = [
+        ...departmentNames.filter(name => name !== NONE_DEPARTMENT),
+        ...orphanSections,
+        ...(groupedUsers[NONE_DEPARTMENT] ? [NONE_DEPARTMENT] : []),
+        ...(groupedUsers[UNASSIGNED_SECTION] ? [UNASSIGNED_SECTION] : []),
+    ];
 
     return (
         <div className="flex flex-col gap-8">
@@ -342,7 +342,13 @@ export default function UsersPage() {
                     Visualizza e gestisci gli utenti della tua organizzazione raggruppati per dipartimento.
                 </p>
             </div>
-            <div className="flex justify-end">
+            <div className="flex flex-wrap justify-end gap-2">
+                {isHrUser && (
+                    <Button variant="outline" onClick={() => setIsDepartmentsDialogOpen(true)}>
+                        <Building2 className="mr-2 h-4 w-4" />
+                        Gestisci Dipartimenti
+                    </Button>
+                )}
                 <Dialog open={isAddUserDialogOpen} onOpenChange={setIsAddUserDialogOpen}>
                     <DialogTrigger asChild>
                         <Button>
@@ -357,13 +363,17 @@ export default function UsersPage() {
                                 Verrà creato un nuovo account in Firebase Authentication e un profilo utente in Firestore.
                             </DialogDescription>
                         </DialogHeader>
-                        <AddUserForm onSuccess={() => {
-                            setIsAddUserDialogOpen(false);
-                            fetchUsers(); // Refresh the user list after adding
-                        }} />
+                        <AddUserForm onSuccess={() => setIsAddUserDialogOpen(false)} />
                     </DialogContent>
                 </Dialog>
             </div>
+            {isHrUser && (
+                <ManageDepartmentsDialog
+                    open={isDepartmentsDialogOpen}
+                    onOpenChange={setIsDepartmentsDialogOpen}
+                    userCounts={userCounts}
+                />
+            )}
 
             {pageLoading ? (
                 <UsersSkeleton />
@@ -375,7 +385,12 @@ export default function UsersPage() {
                     <Button onClick={fetchUsers} className="mt-6">Riprova</Button>
                 </div>
             ) : (
-                <Accordion type="multiple" defaultValue={sortedDepartments} className="w-full space-y-4">
+                <Accordion
+                    type="multiple"
+                    value={sortedDepartments.filter(d => !closedSections.includes(d))}
+                    onValueChange={(open) => setClosedSections(sortedDepartments.filter(d => !open.includes(d)))}
+                    className="w-full space-y-4"
+                >
                     {sortedDepartments.map((department) => (
                         <AccordionItem value={department} key={department} className="border-none">
                             <Card>
@@ -385,7 +400,7 @@ export default function UsersPage() {
                                             <div className="flex-1">
                                                 <CardTitle className="text-xl">{department}</CardTitle>
                                                 <CardDescription className="flex items-center gap-2">
-                                                   <UsersIcon className="h-4 w-4"/> {groupedUsers[department].length} Utenti
+                                                   <UsersIcon className="h-4 w-4"/> {groupedUsers[department].length === 1 ? '1 Utente' : `${groupedUsers[department].length} Utenti`}
                                                 </CardDescription>
                                             </div>
                                         </div>
@@ -405,6 +420,13 @@ export default function UsersPage() {
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
+                                                {groupedUsers[department].length === 0 && (
+                                                    <TableRow>
+                                                        <TableCell colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
+                                                            Nessun utente in questo dipartimento.
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
                                                 {groupedUsers[department].map((u) => (
                                                     <TableRow key={u.id}>
                                                         <TableCell className="font-medium">{u.firstName} {u.lastName}</TableCell>
@@ -488,7 +510,7 @@ export default function UsersPage() {
                                     className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     <option value="" disabled>Seleziona un dipartimento</option>
-                                    {DEPARTMENTS.map(dep => (
+                                    {[...departmentNames, ...(editingUser.department && !departmentNames.includes(editingUser.department) ? [editingUser.department] : [])].map(dep => (
                                         <option key={dep} value={dep}>{dep}</option>
                                     ))}
                                 </select>
@@ -498,7 +520,7 @@ export default function UsersPage() {
                                 <>
                                     <h3 className="text-lg font-medium border-b pb-2">Dipartimenti Gestiti</h3>
                                     <div className="grid grid-cols-2 gap-4">
-                                        {DEPARTMENTS.filter(d => d !== "Nessuno").map(dep => (
+                                        {assignableNames.map(dep => (
                                             <div key={dep} className="flex items-center space-x-2">
                                                 <Checkbox
                                                     id={`dep-${dep}`}

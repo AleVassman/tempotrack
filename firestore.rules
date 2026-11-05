@@ -21,6 +21,29 @@ service cloud.firestore {
       allow update: if request.auth.uid == userId || getUserData(request.auth.uid).role == 'hr';
     }
 
+    // Rules for the departments collection (managed by HR in Gestione Utenti)
+    function isHr() {
+      return getUserData(request.auth.uid).role == 'hr';
+    }
+    function isValidDepartment(data) {
+      return data.keys().hasAll(['name', 'isSystem'])
+          && data.name is string
+          && data.name.size() > 0 && data.name.size() <= 50
+          && data.isSystem is bool;
+    }
+    match /departments/{departmentId} {
+      // Everyone signed in needs the list for dropdowns and groupings.
+      allow read: if request.auth != null;
+      // Only the fixed "nessuno" document may be created as the protected fallback.
+      allow create: if isHr() && isValidDepartment(request.resource.data)
+                    && (request.resource.data.isSystem == false || departmentId == 'nessuno');
+      // The protected department can never be renamed or deleted, and nothing can become protected.
+      allow update: if isHr() && resource.data.get('isSystem', false) == false
+                    && isValidDepartment(request.resource.data)
+                    && request.resource.data.isSystem == false;
+      allow delete: if isHr() && resource.data.get('isSystem', false) == false;
+    }
+
     // Rules for the holidays collection
     match /holidays/{year} {
       allow read: if request.auth != null;

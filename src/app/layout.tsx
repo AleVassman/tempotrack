@@ -13,6 +13,7 @@ import { auth, db } from '@/lib/firebase';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { DAYS_OF_WEEK, USER_ROLES } from '@/lib/constants';
 import { OfflineIndicator } from '@/components/offline-indicator';
+import { DepartmentsProvider } from '@/hooks/use-departments';
 
 export interface WorkDay {
   day: typeof DAYS_OF_WEEK[number]['id'];
@@ -140,6 +141,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={value}>
+     <DepartmentsProvider enabled={!!user} canSeed={userProfile?.role === USER_ROLES.HR}>
       {/* These components are global and should be outside the main layout logic */}
       <Toaster />
       <OfflineIndicator />
@@ -163,6 +165,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
             </div>
           </SidebarProvider>
       ) : null}
+     </DepartmentsProvider>
     </AuthContext.Provider>
   );
 }
